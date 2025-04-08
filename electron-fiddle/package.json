@@ -20,6 +20,14 @@
       {
         "command": "extension.changeElectronVersion",
         "title": "Change Electron version"
+      },
+      {
+        "command": "extension.startFiddle",
+        "title": "Start fiddle"
+      },
+      {
+        "command": "extension.stopFiddle",
+        "title": "stop fiddle"
       }
     ]
   },

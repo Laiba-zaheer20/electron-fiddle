@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
-import { ElectronVersions } from '@electron/fiddle-core'; // Importing ElectronVersions
+import { Runner, ElectronVersions, FiddleFactory, Paths } from '@electron/fiddle-core';
+
+let runningProcess: any = null;
 
 export function activate(context: vscode.ExtensionContext) {
     // Command to create Electron template
@@ -147,9 +149,70 @@ app.on('window-all-closed', () => {
         });
     });
 
+    // Command to start the fiddle
+    let startFiddleCommand = vscode.commands.registerCommand('extension.startFiddle', async () => {
+        const fiddlePath = await vscode.window.showInputBox({
+            prompt: 'Enter path to fiddle or URL (Gist, GitHub, or local directory)',
+            value: ''
+        });
+
+        if (fiddlePath) {
+            startFiddle(fiddlePath);
+        }
+    });
+
+    // Command to stop the fiddle
+    let stopFiddleCommand = vscode.commands.registerCommand('extension.stopFiddle', async () => {
+        stopFiddle();
+    });
+
     // Register commands
     context.subscriptions.push(createElectronTemplate);
     context.subscriptions.push(changeElectronVersion);
+    context.subscriptions.push(startFiddleCommand);
+    context.subscriptions.push(stopFiddleCommand);
 }
 
-export function deactivate() {}
+export function deactivate() {
+    stopFiddle();
+}
+
+async function startFiddle(fiddlePath: string) {
+    try {
+        // Define the paths where the necessary Electron files will be stored
+        const paths: Paths = {
+            electronDownloads: '/tmp/my/electron-downloads', // Store downloaded Electron versions
+            electronInstall: '/tmp/my/electron-install',     // Store installed Electron versions
+            fiddles: '/tmp/my/fiddles',                       // Store fiddles
+            versionsCache: '/tmp/my/releases.json',           // Store versions 
+        };
+
+        const runner = await Runner.create({ paths });
+
+        // Create a factory to load the fiddle from the Gist
+        const factory = new FiddleFactory();
+
+        // Load the fiddle from the folder for now - we can open from Gist or any repo
+        const fiddle = await factory.fromFolder(fiddlePath);
+        console.log('Fiddle files:', fiddle);
+        // Start the fiddle using Runner.spawn with a specific Electron version(electron version can be asked from user)
+        runningProcess = await runner.spawn('35.0.0', fiddle, {
+            stdio: 'inherit', // inherits stdout and stderr for the process
+        });
+
+        vscode.window.showInformationMessage("Fiddle started successfully.");
+    } catch (error : any) {
+        vscode.window.showErrorMessage("Error starting the fiddle: " + error.message);
+    }
+}
+
+// Stop the fiddle by killing the process
+async function stopFiddle() {
+    if (runningProcess) {
+        runningProcess.kill('SIGINT');  // Send a signal to stop the process
+        vscode.window.showInformationMessage("Fiddle stopped successfully.");
+        runningProcess = null;
+    } else {
+        vscode.window.showInformationMessage("No running fiddle to stop.");
+    }
+}
